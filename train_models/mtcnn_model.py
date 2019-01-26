@@ -4,6 +4,22 @@ from tensorflow.contrib import slim
 import numpy as np
 num_keep_radio = 0.7
 
+
+"""
+Since MTCNN is a Multi-task Network,we should pay attention to the format of training data.The format is:
+
+[path to image][cls_label][bbox_label][landmark_label]
+
+For pos sample,cls_label=1,bbox_label(calculate),landmark_label=[0,0,0,0,0,0,0,0,0,0].
+
+For part sample,cls_label=-1,bbox_label(calculate),landmark_label=[0,0,0,0,0,0,0,0,0,0].
+
+For landmark sample,cls_label=-2,bbox_label=[0,0,0,0],landmark_label(calculate).
+
+For neg sample,cls_label=0,bbox_label=[0,0,0,0],landmark_label=[0,0,0,0,0,0,0,0,0,0].
+
+"""
+
 def prelu(inputs):
     alphas = tf.get_variable("alphas", shape=inputs.get_shape()[-1], dtype=tf.float32, initializer=tf.constant_initializer(0.25))
     pos = tf.nn.relu(inputs)
@@ -68,7 +84,8 @@ def bbox_ohem_orginal(bbox_pred,bbox_target,label):
     _, k_index = tf.nn.top_k(square_error, k=keep_num)
     square_error = tf.gather(square_error, k_index)
     return tf.reduce_mean(square_error)
-#label=1 or label=-1 then do regression
+
+#label=1 or label=-1 then do regression. 1正样本，-1：part样本
 def bbox_ohem(bbox_pred,bbox_target,label):
     zeros_index = tf.zeros_like(label, dtype=tf.float32)
     ones_index = tf.ones_like(label,dtype=tf.float32)
@@ -78,6 +95,11 @@ def bbox_ohem(bbox_pred,bbox_target,label):
     square_error = tf.reduce_sum(square_error,axis=1)
     #keep_num scalar
     num_valid = tf.reduce_sum(valid_inds)
+    """
+        下面这里被作者注释掉的部分：num_keep_radio，PPT 里有提到  在线困难样本选择
+        每个batch中选取loss最大的70%进行反向传播
+    """
+
     #keep_num = tf.cast(num_valid*num_keep_radio,dtype=tf.int32)
     keep_num = tf.cast(num_valid, dtype=tf.int32)
     #keep valid index square_error
@@ -86,6 +108,8 @@ def bbox_ohem(bbox_pred,bbox_target,label):
     square_error = tf.gather(square_error, k_index)
     return tf.reduce_mean(square_error)
 
+# landmark loss TODO
+# landmark_label=[0,0,0,0,0,0,0,0,0,0].
 def landmark_ohem(landmark_pred,landmark_target,label):
     '''
     :param landmark_pred:
@@ -93,18 +117,53 @@ def landmark_ohem(landmark_pred,landmark_target,label):
     :param label:
     :return: mean euclidean loss
     '''
-    #keep label =-2  then do landmark detection
+    # landmark sample,cls_label=-2
+    # keep label =-2  then do landmark detection
     ones = tf.ones_like(label,dtype=tf.float32)
     zeros = tf.zeros_like(label,dtype=tf.float32)
+
+    '''
+    tf.where
+        https://www.tensorflow.org/api_docs/python/tf/where
+        label, ones, zeros must have same shape.  if tf.equal(label,-2) = True, lable数组对应位置设置为ones对应位置的值也就是1，否则就是zeros对应位置的值0
+    e.g. 
+        import tensorflow as tf
+        import numpy as np
+        sess=tf.Session()
+        label=np.array([0, 1, -2, 0, -2, 1])
+        ones = tf.ones_like(label,dtype=tf.float32)
+        zeros = tf.zeros_like(label,dtype=tf.float32)
+        valid_inds = tf.where(tf.equal(label,-2),ones,zeros)
+        print(sess.run(valid_inds))
+        output: [0. 0. 1. 0. 1. 0.]
+    '''
+
+    '''
+    tf.gather
+        import tensorflow as tf
+
+        temp = tf.range(0,10)*10 + tf.constant(1,shape=[10])
+        temp2 = tf.gather(temp,[1,5,9])
+
+        with tf.Session() as sess:
+
+            print sess.run(temp)
+            print sess.run(temp2)
+
+        输出 
+        [ 1 11 21 31 41 51 61 71 81 91] 
+        [11 51 91]
+    '''
     valid_inds = tf.where(tf.equal(label,-2),ones,zeros)
-    square_error = tf.square(landmark_pred-landmark_target)
-    square_error = tf.reduce_sum(square_error,axis=1)
-    num_valid = tf.reduce_sum(valid_inds)
+    square_error = tf.square(landmark_pred-landmark_target) # 两个 1 *10 的向量相减
+    square_error = tf.reduce_sum(square_error,axis=1) # 以为landmark 1 * 10的向量，所以这里虽然reduce_sum,仅仅表示一个training sample
+    num_valid = tf.reduce_sum(valid_inds) # e.g. [0. 0. 1. 0. 1. 0.] output is: 1+1 =2
     #keep_num = tf.cast(num_valid*num_keep_radio,dtype=tf.int32)
     keep_num = tf.cast(num_valid, dtype=tf.int32)
-    square_error = square_error*valid_inds
-    _, k_index = tf.nn.top_k(square_error, k=keep_num)
-    square_error = tf.gather(square_error, k_index)
+    square_error = square_error*valid_inds #  e.g. valid_inds: [0. 0. 1. 0. 1. 0.]
+    # based on the https://www.tensorflow.org/api_docs/python/tf/math/top_k,  tf.nn.top_k 函数 返回 values  and index 两个值
+    _, k_index = tf.nn.top_k(square_error, k=keep_num) # sample square_error [....] 只有是1的位置值才比较大
+    square_error = tf.gather(square_error, k_index) #square_error是一个向量，表示每个sample的square_error, 这里返回还是个向量，只不过过滤了一下，只选中了k_index的位置的square_error
     return tf.reduce_mean(square_error)
     
 def cal_accuracy(cls_prob,label):
@@ -191,7 +250,9 @@ def R_Net(inputs,label=None,bbox_target=None,landmark_target=None,training=True)
             return cls_loss,bbox_loss,landmark_loss,L2_loss,accuracy
         else:
             return cls_prob,bbox_pred,landmark_pred
-    
+
+
+# slim lib: https://github.com/tensorflow/models/tree/master/research/slim
 def O_Net(inputs,label=None,bbox_target=None,landmark_target=None,training=True):
     with slim.arg_scope([slim.conv2d],
                         activation_fn = prelu,
