@@ -5,11 +5,11 @@ import cv2
 import os
 import numpy.random as npr
 from utils import IoU
-anno_file = "wider_face_train.txt"
-im_dir = "WIDER_train/images"
-pos_save_dir = "12/positive"
-part_save_dir = "12/part"
-neg_save_dir = '12/negative'
+anno_file = "wider_face_train.txt" # train data 的 label
+im_dir = "WIDER_train/images" # train data 实际的图像存储路径
+pos_save_dir = "12/positive" # 1
+part_save_dir = "12/part" # -1 i.e. 框 和 ground truth IOU 在 0.45 0.6 之间
+neg_save_dir = '12/negative' # 0 
 save_dir = "./12"
 if not os.path.exists(save_dir):
     os.mkdir(save_dir)
@@ -23,7 +23,7 @@ if not os.path.exists(neg_save_dir):
 f1 = open(os.path.join(save_dir, 'pos_12.txt'), 'w')
 f2 = open(os.path.join(save_dir, 'neg_12.txt'), 'w')
 f3 = open(os.path.join(save_dir, 'part_12.txt'), 'w')
-with open(anno_file, 'r') as f:
+with open(anno_file, 'r') as f: # wider_face_train.txt label file
     annotations = f.readlines()
 num = len(annotations)
 print("%d pics in total" % num)
@@ -32,16 +32,24 @@ n_idx = 0 # negative
 d_idx = 0 # dont care
 idx = 0
 box_idx = 0
-for annotation in annotations:
+
+"""
+ annotation(i.e. label file) format: http://mmlab.ie.cuhk.edu.hk/projects/WIDERFace/ 
+ each line in label file (i.e.wider_face_train.txt): 0--Parade/0_Parade_marchingband_1_849 448.51 329.63 570.09 478.23 448.51 329.63 570.09 478.23
+"""
+for annotation in annotations: # iterate through all label lines
     annotation = annotation.strip().split(' ')
-    #image path
-    im_path = annotation[0]
+    im_path = annotation[0] #image path
     #boxed change to float type
-    bbox = list(map(float, annotation[1:]))
+    bbox = list(map(float, annotation[1:])) # 用' ' split之后，从第一个元素开始往后的数字都是表示ground truth bounding box的位置的数字
     #gt
-    boxes = np.array(bbox, dtype=np.float32).reshape(-1, 4)
+    # 用' ' split之后, annotation[1:]，每4个数字为一组， 表示一个bounding box的位置
+    # sample:448.51 329.63 570.09 478.23 448.51 329.63 570.09 478  每四个数字reshape成一行，表示一个gt bounding box 的位置
+    boxes = np.array(bbox, dtype=np.float32).reshape(-1, 4) 
     #load image
-    img = cv2.imread(os.path.join(im_dir, im_path + '.jpg'))
+    img = cv2.imread(os.path.join(im_dir, im_path + '.jpg')) # im_dir = "WIDER_train/images", im_path="0--Parade/0_Parade_marchingband_1_799"
+    
+    # just for tracking progress, 每处理100个图片，输出一个log
     idx += 1
     if idx % 100 == 0:
         print("%d images done" % idx)
