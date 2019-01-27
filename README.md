@@ -10,8 +10,8 @@ This work is used for reproduce MTCNN,a Joint Face Detection and Alignment using
 
 
 ## Train Models
-1. Download Wider Face Training part only from Official Website , unzip to replace `WIDER_train` and put it into `prepare_data` folder.
-2. Download landmark training data from [here]((http://mmlab.ie.cuhk.edu.hk/archive/CNN_FacePoint.htm)),unzip and put them into `prepare_data` folder.
+1. Download Wider Face Training part only from Official Website , unzip to replace `WIDER_train` and put it into `prepare_data` folder. In `prepare_data` fold, you should have fold called `WIDER_train`. (i.e. upzipped original data)
+2. Download landmark training data from [here]((http://mmlab.ie.cuhk.edu.hk/archive/CNN_FacePoint.htm)),unzip and put them into `prepare_data` folder. After unzip `train` zip, you should have `train` fold In `prepare_data`. But you have to put all content/subfolds directly into `prepare_data`. (i.e. put `trainImageList.txt`, `lfw_5590`, `testImageList.txt`, `net_7876` 4 files directly under `prepare_data` fold)
 3. Run `sh prepare_pnet_data.sh` to generate training data for **PNet**.
 4. Run `sh train_pnet.sh` to train **PNet**.
 5. Run `sh prepare_rnet_data.sh` to generate training data for **RNet**.
