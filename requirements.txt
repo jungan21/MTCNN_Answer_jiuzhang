@@ -1,6 +1,6 @@
 easydict==1.8
 numpy==1.15.2
+Pillow
 opencv-python==3.4.3.18
 tensorflow==1.12.0
-Pillow
 tensorflow-gpu==0.12.1
