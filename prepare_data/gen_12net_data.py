@@ -46,7 +46,7 @@ for annotation in annotations: # iterate through all label lines
     # 用' ' split之后, annotation[1:]，每4个数字为一组， 表示一个bounding box的位置
     # sample:448.51 329.63 570.09 478.23 448.51 329.63 570.09 478  每四个数字reshape成一行，表示一个gt bounding box 的位置
     boxes = np.array(bbox, dtype=np.float32).reshape(-1, 4) 
-    #load image
+    #load image e.g. cv2.imread("WIDER_train/images/0--Parade/0_Parade_marchingband_1_849.jpg") imag.shape:(1385, 1024, 3)
     img = cv2.imread(os.path.join(im_dir, im_path + '.jpg')) # im_dir = "WIDER_train/images", im_path="0--Parade/0_Parade_marchingband_1_799"
     
     # just for tracking progress, 每处理100个图片，输出一个log
@@ -56,31 +56,40 @@ for annotation in annotations: # iterate through all label lines
         
     height, width, channel = img.shape
 
+    """
+        把随机生成的BBOX和该图片对应的guarant true boxes做IOU的比较。
+        根据IOU大小的不同，生成正label样本(IOU>0.65),负label样本(IOU<0.4)，part样本(0.4<IOU<0.65)
+    """
+
     neg_num = 0
     #1---->50
+    # while loop: randomly generate 50 negative 
     while neg_num < 50:
         #neg_num's size [40,min(width, height) / 2],min_size:40 
-        size = npr.randint(12, min(width, height) / 2)
-        #top_left
+        size = npr.randint(12, min(width, height) / 2) #  12 <= randomly generate number < min(width, height) / 2
+        
+        #top_left 坐标
         nx = npr.randint(0, width - size)
         ny = npr.randint(0, height - size)
         #random crop
         crop_box = np.array([nx, ny, nx + size, ny + size])
-        #cal iou
-        Iou = IoU(crop_box, boxes)
+        #calculate iou from utils.py IoU function
+        # 随机生成的bbox的位置 去和"wider_face_train.txt"文件里当前行的所有ground truth的bboxs 计算Iou,所以这里返回的Iou是一个数组
+        Iou = IoU(crop_box, boxes) 
         
         cropped_im = img[ny : ny + size, nx : nx + size, :]
         resized_im = cv2.resize(cropped_im, (12, 12), interpolation=cv2.INTER_LINEAR)
 
-        if np.max(Iou) < 0.3:
+        if np.max(Iou) < 0.3: # Iou < 0.3 ==> 当前随机生成的bounding box 是 negative bounding box
             # Iou with all gts must below 0.3
             save_file = os.path.join(neg_save_dir, "%s.jpg"%n_idx)
             f2.write("12/negative/%s.jpg"%n_idx + ' 0\n')
             cv2.imwrite(save_file, resized_im)
             n_idx += 1
             neg_num += 1
+
     #as for 正 part样本
-    for box in boxes:
+    for box in boxes: # loop through all ground truth bounding box of current image (i.e. current line in "wider_face_train.txt" file)
         # box (x_left, y_top, x_right, y_bottom)
         x1, y1, x2, y2 = box
         #gt's width
@@ -142,12 +151,12 @@ for annotation in annotations: # iterate through all label lines
             resized_im = cv2.resize(cropped_im, (12, 12), interpolation=cv2.INTER_LINEAR)
 
             box_ = box.reshape(1, -1)
-            if IoU(crop_box, box_) >= 0.65:
+            if IoU(crop_box, box_) >= 0.65: # positve, label 1
                 save_file = os.path.join(pos_save_dir, "%s.jpg"%p_idx)
                 f1.write("12/positive/%s.jpg"%p_idx + ' 1 %.2f %.2f %.2f %.2f\n'%(offset_x1, offset_y1, offset_x2, offset_y2))
                 cv2.imwrite(save_file, resized_im)
                 p_idx += 1
-            elif IoU(crop_box, box_) >= 0.4:
+            elif IoU(crop_box, box_) >= 0.4: # part, label -1
                 save_file = os.path.join(part_save_dir, "%s.jpg"%d_idx)
                 f3.write("12/part/%s.jpg"%d_idx + ' -1 %.2f %.2f %.2f %.2f\n'%(offset_x1, offset_y1, offset_x2, offset_y2))
                 cv2.imwrite(save_file, resized_im)
