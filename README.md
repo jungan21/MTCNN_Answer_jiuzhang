@@ -7,7 +7,9 @@ This work is used for reproduce MTCNN,a Joint Face Detection and Alignment using
 3. 输入命令行: conda create --name mtcnn python=3.6  (`conda deactivate` to deactive current virtual env, `conda remove --name mtcnn --all` to delete viertual env)
 4. 输入命令行: conda activate mtcnn
 5. Install the python dependences `pip3 install -r requirements.txt`
-
+6. Common env and library installation issue:
+   - 因为我们上面用conda command create virtual env, 所以这里用的是conda 的 Python version.
+   - `pip install`, `pip list` 这里的pip 针对的是python 3.6 verison 也就是conda用的python version. 而 `pip3 install` 则针对的是mac os里最新的python version 3.7.2.所以如果我们created `mtcnn`环境里如果缺少什么package,就用 `pip install` 或 `conda install` 来解决。
 
 ## Train Models
 1. Download Wider Face Training part only from Official Website , unzip to replace `WIDER_train` and put it into `prepare_data` folder. In `prepare_data` fold, you should have fold called `WIDER_train`. (i.e. upzipped original data)
