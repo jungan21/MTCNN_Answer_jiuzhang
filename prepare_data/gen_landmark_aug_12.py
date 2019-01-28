@@ -1,4 +1,8 @@
 # coding: utf-8
+
+"""
+用来生成 landmark的 training data
+"""
 import os
 import time
 import math
@@ -44,6 +48,7 @@ def IoU(box, boxes):
     inter = w * h
     ovr = inter*1.0 / (box_area + area - inter)
     return ovr
+
 def GenerateData(ftxt, output,net,argument=False):
     if net == "PNet":
         size = 12
@@ -55,13 +60,16 @@ def GenerateData(ftxt, output,net,argument=False):
         print('Net type error')
         return
     image_id = 0
-    f = open(join(OUTPUT,"landmark_%s_aug.txt" %(size)),'w')
+    f = open(join(OUTPUT,"landmark_%s_aug.txt" %(size)),'w') # OUTPUT = '12',  size = 12 or 24 or 48 根据PNET,RNET,ONET 不同而不同
     #dstdir = "train_landmark_few"
    
-    data = getDataFromTxt(ftxt)
+    # ftxt就是trainImageList.txt 文件
+    # sample line in the file: lfw_5590/Aaron_Eckhart_0001.jpg 84 161 92 169 106.250000 107.750000 146.750000 112.250000 125.250000 142.750000 105.250000 157.750000 139.750000 161.750000
+    data = getDataFromTxt(ftxt) 
+
     idx = 0
     #image_path bbox landmark(5*2)
-    for (imgPath, bbox, landmarkGt) in data:
+    for (imgPath, bbox, landmarkGt) in data: # 对应上面的sample line 就可以看出数据的结构
         #print imgPath
         F_imgs = []
         F_landmarks = []        
@@ -71,16 +79,21 @@ def GenerateData(ftxt, output,net,argument=False):
         img_h,img_w,img_c = img.shape
         gt_box = np.array([bbox.left,bbox.top,bbox.right,bbox.bottom])
         f_face = img[bbox.top:bbox.bottom+1,bbox.left:bbox.right+1]
-        f_face = cv2.resize(f_face,(size,size))
-        landmark = np.zeros((5, 2))
+        f_face = cv2.resize(f_face,(size,size)) # 根据PNET,ONET,RNET 不同这里的size也不同
+        landmark = np.zeros((5, 2)) # 初始化
+
         #normalize
-        for index, one in enumerate(landmarkGt):
+        # （one[0] one[1]）一共5个，每组表示每个landmark的坐标。 (gt_box[0], gt_box[1]) box 左上角坐标， (gt_box[2], gt_box[3]) 表示box  右下脚坐标
+        for index, one in enumerate(landmarkGt): # landmark在train的时候是根据ground truth左上角来的，在没抠出图片之前是根据原图的左上角坐标来的，抠出来以后，又根据抠出来小图的左上角来的
             rv = ((one[0]-gt_box[0])/(gt_box[2]-gt_box[0]), (one[1]-gt_box[1])/(gt_box[3]-gt_box[1]))
             landmark[index] = rv
         
         F_imgs.append(f_face)
         F_landmarks.append(landmark.reshape(10))
         landmark = np.zeros((5, 2))        
+
+        # 对landmark数据增强，因为 WIDER FACE 里人脸检测的trainig data 一共32，032图片并包含393,703人脸，而我们这里landmark traing data 太少 只有10000多张图片
+        # 其实就是random的平移一下
         if argument:
             idx = idx + 1
             if idx % 100 == 0:
@@ -109,7 +122,7 @@ def GenerateData(ftxt, output,net,argument=False):
                 resized_im = cv2.resize(cropped_im, (size, size))
                 #cal iou
                 iou = IoU(crop_box, np.expand_dims(gt_box,0))
-                if iou > 0.65:
+                if iou > 0.65: # 如果平移完了，与ground truth iou还是大于 0.65，我们认为还是landmark的样本
                     F_imgs.append(resized_im)
                     #normalize
                     for index, one in enumerate(landmarkGt):
@@ -120,14 +133,14 @@ def GenerateData(ftxt, output,net,argument=False):
                     landmark_ = F_landmarks[-1].reshape(-1,2)
                     bbox = BBox([nx1,ny1,nx2,ny2])                    
 
-                    #mirror                    
+                    #mirror i.e. 左右翻转一下图片               
                     if random.choice([0,1]) > 0:
                         face_flipped, landmark_flipped = flip(resized_im, landmark_)
                         face_flipped = cv2.resize(face_flipped, (size, size))
                         #c*h*w
                         F_imgs.append(face_flipped)
                         F_landmarks.append(landmark_flipped.reshape(10))
-                    #rotate
+                    #rotate i.e.  随机旋转
                     if random.choice([0,1]) > 0:
                         face_rotated_by_alpha, landmark_rotated = rotate(img, bbox, \
                                                                          bbox.reprojectLandmark(landmark_), 5)#逆时针旋转
@@ -184,7 +197,9 @@ if __name__ == '__main__':
     # train data
     net = "PNet"
     #train_txt = "train.txt"
-    train_txt = "trainImageList.txt"
+    # landmark label 
+    # sample line in the file: lfw_5590/Aaron_Eckhart_0001.jpg 84 161 92 169 106.250000 107.750000 146.750000 112.250000 125.250000 142.750000 105.250000 157.750000 139.750000 161.750000
+    train_txt = "trainImageList.txt" 
     imgs,landmarks = GenerateData(train_txt, OUTPUT,net,argument=True)
     
    

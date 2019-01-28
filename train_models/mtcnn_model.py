@@ -39,9 +39,9 @@ def dense_to_one_hot(labels_dense,num_classes):
 def cls_ohem(cls_prob, label):
     zeros = tf.zeros_like(label)
     #label=-1 --> label=0net_factory
-    label_filter_invalid = tf.where(tf.less(label,0), zeros, label)
+    label_filter_invalid = tf.where(tf.less(label,0), zeros, label) # label <0 的 都标注为0
     num_cls_prob = tf.size(cls_prob)
-    cls_prob_reshape = tf.reshape(cls_prob,[num_cls_prob,-1])
+    cls_prob_reshape = tf.reshape(cls_prob,[num_cls_prob,-1]) # reshape 成 N 行，每行2列
     label_int = tf.cast(label_filter_invalid,tf.int32)
     num_row = tf.to_int32(cls_prob.get_shape()[0])
     row = tf.range(num_row)*2
@@ -210,6 +210,7 @@ def P_Net(inputs,label=None,bbox_target=None,landmark_target=None,training=True)
             landmark_loss = landmark_ohem(landmark_pred,landmark_target,label)
 
             accuracy = cal_accuracy(cls_prob,label)
+            # forward计算出来的L2_loss, 然后返回回去，让train 那个函数 去做反向更新
             L2_loss = tf.add_n(slim.losses.get_regularization_losses())
             return cls_loss,bbox_loss,landmark_loss,L2_loss,accuracy 
         #test

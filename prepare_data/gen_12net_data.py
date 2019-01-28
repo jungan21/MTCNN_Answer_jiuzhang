@@ -1,4 +1,14 @@
 #coding:utf-8
+
+"""
+人脸数据: 用来生成  正，负， part 样本 的training data
+– 读取图片和GT BBOX，随机移动BBOX的位置
+– 把随机生成的BBOX和该图片对应的guarant true boxes做IOU的比较。根
+据IOU大小的不同，生成正label样本(IOU>0.65),负label样本(IOU<0.4)
+，part样本(0.4<IOU<0.65)。
+– 每个样本都是滑动窗口和相应的bounding box的坐标偏移值。
+"""
+
 import sys
 import numpy as np
 import cv2
@@ -61,15 +71,16 @@ for annotation in annotations: # iterate through all label lines
         根据IOU大小的不同，生成正label样本(IOU>0.65),负label样本(IOU<0.4)，part样本(0.4<IOU<0.65)
     """
 
+    # 确保生成50个negative 样本
     neg_num = 0
     #1---->50
-    # while loop: randomly generate 50 negative 
+    # while loop: randomly generate 50 negative sample. 这个while loop确保生成 50 个negative samples
     while neg_num < 50:
         #neg_num's size [40,min(width, height) / 2],min_size:40 
         size = npr.randint(12, min(width, height) / 2) #  12 <= randomly generate number < min(width, height) / 2
         
-        #top_left 坐标
-        nx = npr.randint(0, width - size)
+        #top_left 坐标 随机移动多少
+        nx = npr.randint(0, width - size) 
         ny = npr.randint(0, height - size)
         #random crop
         crop_box = np.array([nx, ny, nx + size, ny + size])
@@ -78,6 +89,7 @@ for annotation in annotations: # iterate through all label lines
         Iou = IoU(crop_box, boxes) 
         
         cropped_im = img[ny : ny + size, nx : nx + size, :]
+        # resize to (12, 12) 因为根据PPT里train PNET 的输入图片的size 是 （12， 12）
         resized_im = cv2.resize(cropped_im, (12, 12), interpolation=cv2.INTER_LINEAR)
 
         if np.max(Iou) < 0.3: # Iou < 0.3 ==> 当前随机生成的bounding box 是 negative bounding box
@@ -88,7 +100,7 @@ for annotation in annotations: # iterate through all label lines
             n_idx += 1
             neg_num += 1
 
-    #as for 正 part样本
+    # 生成正样本， part样本
     for box in boxes: # loop through all ground truth bounding box of current image (i.e. current line in "wider_face_train.txt" file)
         # box (x_left, y_top, x_right, y_bottom)
         x1, y1, x2, y2 = box
@@ -101,7 +113,7 @@ for annotation in annotations: # iterate through all label lines
         # in case the ground truth boxes of small faces are not accurate
         if max(w, h) < 40 or x1 < 0 or y1 < 0:
             continue
-        for i in range(5):
+        for i in range(5): # 随机5次，每次轻微移动一下, 为了生成negative sample
             size = npr.randint(12, min(width, height) / 2)
             # delta_x and delta_y are offsets of (x1, y1)
             delta_x = npr.randint(max(-size, -x1), w)
@@ -123,8 +135,8 @@ for annotation in annotations: # iterate through all label lines
                 cv2.imwrite(save_file, resized_im)
                 n_idx += 1        
 	# generate positive examples and part faces
-        for i in range(20):
-            # pos and part face size [minsize*0.8,maxsize*1.25]
+        for i in range(20): # 随机移动20次，
+            # pos and part face size [minsize*0.8,maxsize*1.25] 以 确保随机移动生成的是正样本或part样本，不会变成negative 样本
             size = npr.randint(int(min(w, h) * 0.8), np.ceil(1.25 * max(w, h)))
 
             # delta here is the offset of box center
@@ -140,7 +152,7 @@ for annotation in annotations: # iterate through all label lines
             if nx2 > width or ny2 > height:
                 continue 
             crop_box = np.array([nx1, ny1, nx2, ny2])
-            #yu gt de offset
+            #yu gt de offset 与ground truth bounding box 的offset
             offset_x1 = (x1 - nx1) / float(size)
             offset_y1 = (y1 - ny1) / float(size)
             offset_x2 = (x2 - nx2) / float(size)
@@ -153,6 +165,7 @@ for annotation in annotations: # iterate through all label lines
             box_ = box.reshape(1, -1)
             if IoU(crop_box, box_) >= 0.65: # positve, label 1
                 save_file = os.path.join(pos_save_dir, "%s.jpg"%p_idx)
+                #  1 %.2f %.2f %.2f %.2f\n'， 这里的1 表示是正样本的label. 
                 f1.write("12/positive/%s.jpg"%p_idx + ' 1 %.2f %.2f %.2f %.2f\n'%(offset_x1, offset_y1, offset_x2, offset_y2))
                 cv2.imwrite(save_file, resized_im)
                 p_idx += 1
