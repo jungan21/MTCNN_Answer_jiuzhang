@@ -29,17 +29,19 @@ videopath = "./video_test.avi"
 mtcnn_detector = MtcnnDetector(detectors=detectors, min_face_size=min_face_size,
                                stride=stride, threshold=thresh, slide_window=slide_window)
 
-video_capture = cv2.VideoCapture(videopath)
+# 如果从自己laptop 摄像头读入，cv2.VideoCapture(videopath) ===> cv2.VideoCapture(0)
+# cv2.VideoCapture https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_gui/py_video_display/py_video_display.html
+video_capture = cv2.VideoCapture(videopath) # cv2.VideoCapture(0) for laptop camera
 video_capture.set(3, 340)
 video_capture.set(4, 480)
 corpbbox = None
 while True:
     # fps = video_capture.get(cv2.CAP_PROP_FPS)
     t1 = cv2.getTickCount()
-    ret, frame = video_capture.read()
+    ret, frame = video_capture.read() # capture frame-by-frame. read() returns a bool(True/False). If frame is read correctly, it's True.
     if ret:
         image = np.array(frame)
-        boxes_c,landmarks = mtcnn_detector.detect(image)
+        boxes_c,landmarks = mtcnn_detector.detect(image) # use mtcnn detector to read image
         
         t2 = cv2.getTickCount()
         t = (t2 - t1) / cv2.getTickFrequency()
